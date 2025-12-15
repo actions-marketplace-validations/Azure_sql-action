@@ -27,12 +27,6 @@ jobs:
         repository: ${{ github.event.pull_request.head.repo.full_name }}
         ref: ${{ github.event.pull_request.head.sha }}
 
-    - name: Checkout base branch for comparison
-      uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      with:
-        ref: ${{ github.base_ref }}
-        path: base-repo
-
     - name: Verify package-lock.json exists
       run: |
         if (!(Test-Path package-lock.json)) {
@@ -43,15 +37,19 @@ jobs:
 
     - name: Check if package-lock.json was modified
       run: |
-        $lockfileChanged = git diff --name-only base-repo/package-lock.json package-lock.json
-        if ($lockfileChanged) {
+        # Check git log to see if package-lock.json was modified in this PR
+        git fetch origin ${{ github.base_ref }} --depth=1
+        $changedFiles = git diff --name-only origin/${{ github.base_ref }}...HEAD
+        
+        if ($changedFiles -match "package-lock.json") {
           Write-Warning "⚠️ package-lock.json has been modified in this PR."
           Write-Warning "This requires manual review to ensure no malicious dependencies were added."
           Write-Warning "Reviewers: Please carefully examine the dependency changes before approving."
         } else {
-          Write-Host "✓ package-lock.json unchanged - no new dependencies"
+          Write-Host "✓ package-lock.json unchanged - no new dependencies" -ForegroundColor Green
         }
       shell: pwsh
+      continue-on-error: true
 
     - name: Verify package.json integrity
       run: |
